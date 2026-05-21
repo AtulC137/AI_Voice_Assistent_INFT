@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>AI Voice Assistant</title>
+<title>AI Voice Assistant</title>
 </head>
 
 <body>
@@ -10,7 +10,9 @@
 <h1>AI Voice Assistant</h1>
 
 <button id="recordBtn">
+
 Start Recording
+
 </button>
 
 <script>
@@ -26,42 +28,77 @@ let initialized=false;
 let recording=false;
 
 
-
 function connectSocket(){
 
-    ws=new WebSocket(
-        "ws://localhost:8000/ws"
-    );
+ws=new WebSocket(
 
-    ws.binaryType="arraybuffer";
+"ws://localhost:8000/ws"
 
-
-    ws.onopen=()=>{
-
-        console.log(
-            "Connected"
-        );
-
-    };
+);
 
 
-    ws.onmessage=(event)=>{
-
-        console.log(
-            "[SERVER]",
-            event.data
-        );
-
-    };
+ws.binaryType="arraybuffer";
 
 
-    ws.onclose=()=>{
+ws.onopen=()=>{
 
-        console.log(
-            "Disconnected"
-        );
+console.log(
+"Connected"
+);
 
-    };
+};
+
+
+ws.onmessage=(event)=>{
+
+
+console.log(
+"Audio received"
+);
+
+
+const blob=
+
+new Blob(
+
+[event.data],
+
+{
+
+type:"audio/wav"
+
+}
+
+);
+
+
+const url=
+
+URL.createObjectURL(
+
+blob
+
+);
+
+
+const audio=
+
+new Audio(url);
+
+
+audio.play();
+
+
+};
+
+
+ws.onclose=()=>{
+
+console.log(
+"Disconnected"
+);
+
+};
 
 }
 
@@ -69,42 +106,43 @@ function connectSocket(){
 
 async function initializeAudio(){
 
-    if(initialized){
+if(initialized){
 
-        return;
-    }
+return;
 
-
-    mediaStream=
-
-    await navigator
-    .mediaDevices
-    .getUserMedia({
-
-        audio:true
-
-    });
+}
 
 
-    audioContext=
+mediaStream=
 
-    new AudioContext({
+await navigator
+.mediaDevices
+.getUserMedia({
 
-        sampleRate:16000
+audio:true
 
-    });
-
-
-    await audioContext
-    .audioWorklet
-    .addModule(
-
-        "/audio-processor.js"
-
-    );
+});
 
 
-    initialized=true;
+audioContext=
+
+new AudioContext({
+
+sampleRate:16000
+
+});
+
+
+await audioContext
+.audioWorklet
+.addModule(
+
+"/audio-processor.js"
+
+);
+
+
+initialized=true;
 
 }
 
@@ -118,6 +156,7 @@ document
 
 
 if(!recording){
+
 
 recording=true;
 
@@ -158,7 +197,9 @@ audioContext,
 );
 
 
-workletNode.port.onmessage=(event)=>{
+workletNode
+.port
+.onmessage=(event)=>{
 
 
 if(!recording){
@@ -193,11 +234,17 @@ i++
 let s=
 
 Math.max(
+
 -1,
+
 Math.min(
+
 1,
+
 samples[i]
+
 )
+
 );
 
 
@@ -243,6 +290,7 @@ workletNode.connect(
 audioContext.destination
 );
 
+
 }
 
 
@@ -262,7 +310,9 @@ document
 
 
 console.log(
+
 "Stopping recording..."
+
 );
 
 
@@ -288,5 +338,4 @@ type:"stop"
 </script>
 
 </body>
-
 </html>

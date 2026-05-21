@@ -5,6 +5,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.services.stt.sarvam_stt import SarvamSTT
 from app.services.llm.llm_service import LLMService
+from app.services.tts.sarvam_tts import SarvamTTS
 
 
 async def websocket_endpoint(
@@ -19,18 +20,17 @@ async def websocket_endpoint(
 
 
     stt=SarvamSTT()
-
     await stt.connect()
 
-
     llm=LLMService()
+
+    tts=SarvamTTS()
 
 
     audio_buffer=b""
 
 
     try:
-
 
         while True:
 
@@ -55,7 +55,6 @@ async def websocket_endpoint(
                 )
 
 
-
             elif "text" in message:
 
 
@@ -70,21 +69,7 @@ async def websocket_endpoint(
 
 
                     print(
-                        "\n[STOP RECEIVED]"
-                    )
-
-
-                    print(
                         "\nSending combined audio..."
-                    )
-
-
-                    print(
-
-                        "Bytes:",
-
-                        len(audio_buffer)
-
                     )
 
 
@@ -99,15 +84,6 @@ async def websocket_endpoint(
 
 
                     response=await stt.receive()
-
-
-                    print(
-                        "\n[STT RESPONSE]"
-                    )
-
-                    print(
-                        response
-                    )
 
 
                     transcript=(
@@ -126,19 +102,11 @@ async def websocket_endpoint(
 
 
                     print(
-                        "\n================"
-                    )
-
-                    print(
-                        "[TRANSCRIPT]"
+                        "\n[TRANSCRIPT]"
                     )
 
                     print(
                         transcript
-                    )
-
-                    print(
-                        "================"
                     )
 
 
@@ -162,18 +130,26 @@ async def websocket_endpoint(
                     )
 
 
-                    await websocket.send_text(
+                    audio=await tts.generate(
 
                         llm_response
 
                     )
 
 
+                    if audio:
+
+
+                        await websocket.send_bytes(
+
+                            audio
+
+                        )
+
+
                     await websocket.close()
 
-
                     break
-
 
 
     except WebSocketDisconnect:
@@ -193,7 +169,6 @@ async def websocket_endpoint(
 
 
     finally:
-
 
         await stt.close()
 
