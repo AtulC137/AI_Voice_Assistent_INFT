@@ -9,39 +9,34 @@
 
 <h1>AI Voice Assistant</h1>
 
-<button id="startBtn">
-    Start
-</button>
-
-<button id="stopBtn">
-    Stop
+<button id="recordBtn">
+Start Recording
 </button>
 
 <script>
 
-let ws = null;
+let ws=null;
 
-let audioContext = null;
-let mediaStream = null;
-let source = null;
-let workletNode = null;
+let audioContext=null;
+let mediaStream=null;
+let source=null;
+let workletNode=null;
 
-let chunkCount = 0;
-
-let initialized = false;
+let initialized=false;
+let recording=false;
 
 
 
 function connectSocket(){
 
-    ws = new WebSocket(
+    ws=new WebSocket(
         "ws://localhost:8000/ws"
     );
 
-    ws.binaryType = "arraybuffer";
+    ws.binaryType="arraybuffer";
 
 
-    ws.onopen = ()=>{
+    ws.onopen=()=>{
 
         console.log(
             "Connected"
@@ -50,17 +45,17 @@ function connectSocket(){
     };
 
 
-    ws.onmessage = (event)=>{
+    ws.onmessage=(event)=>{
 
         console.log(
-            "Transcript:",
+            "[SERVER]",
             event.data
         );
 
     };
 
 
-    ws.onclose = ()=>{
+    ws.onclose=()=>{
 
         console.log(
             "Disconnected"
@@ -71,90 +66,45 @@ function connectSocket(){
 }
 
 
-window.onload=()=>{
-
-    connectSocket();
-
-};
-
-
 
 async function initializeAudio(){
 
     if(initialized){
 
         return;
-
     }
 
-    try{
 
-        mediaStream=
+    mediaStream=
 
-        await navigator
-        .mediaDevices
-        .getUserMedia({
+    await navigator
+    .mediaDevices
+    .getUserMedia({
 
-            audio:true
+        audio:true
 
-        });
-
-
-        console.log(
-
-            "Mic permission granted"
-
-        );
+    });
 
 
-        audioContext=
+    audioContext=
 
-        new AudioContext({
+    new AudioContext({
 
-            sampleRate:16000
+        sampleRate:16000
 
-        });
-
-
-        console.log(
-
-            "Sample rate:",
-
-            audioContext.sampleRate
-
-        );
+    });
 
 
-        await audioContext
-        .audioWorklet
-        .addModule(
+    await audioContext
+    .audioWorklet
+    .addModule(
 
-            "/audio-processor.js"
+        "/audio-processor.js"
 
-        );
-
-
-        console.log(
-
-            "Worklet loaded"
-
-        );
+    );
 
 
-        initialized=true;
-
-        console.log(
-            "Audio initialized"
-        );
-
-
-    }
-
-    catch(e){
-
-        console.log(e);
-
-    }
+    initialized=true;
 
 }
 
@@ -162,18 +112,29 @@ async function initializeAudio(){
 
 document
 .getElementById(
-    "startBtn"
+"recordBtn"
 )
 .onclick=async()=>{
 
 
-try{
+if(!recording){
+
+recording=true;
+
+
+connectSocket();
+
+
+document
+.getElementById(
+"recordBtn"
+)
+.innerText=
+
+"Stop Recording";
 
 
 await initializeAudio();
-
-
-chunkCount=0;
 
 
 source=
@@ -181,7 +142,7 @@ source=
 audioContext
 .createMediaStreamSource(
 
-    mediaStream
+mediaStream
 
 );
 
@@ -190,204 +151,139 @@ workletNode=
 
 new AudioWorkletNode(
 
-    audioContext,
+audioContext,
 
-    "audio-processor"
+"audio-processor"
 
 );
 
 
-workletNode
-.port
-.onmessage=(event)=>{
+workletNode.port.onmessage=(event)=>{
 
 
-    let samples=
+if(!recording){
 
-    event.data;
+return;
 
-
-    let pcmData=
-
-    new Int16Array(
-
-        samples.length
-
-    );
+}
 
 
-    for(
+let samples=
 
-        let i=0;
-
-        i<samples.length;
-
-        i++
-
-    ){
-
-        let s=
-
-        Math.max(
-
-            -1,
-
-            Math.min(
-
-                1,
-
-                samples[i]
-
-            )
-
-        );
+event.data;
 
 
-        pcmData[i]=
+let pcmData=
 
-        s<0
+new Int16Array(
 
-        ? s*32768
-        : s*32767;
+samples.length
 
-    }
-
-
-    chunkCount++;
+);
 
 
-    console.log(
+for(
 
-        "Chunk:",
+let i=0;
+i<samples.length;
+i++
 
-        chunkCount,
+){
 
-        "| Samples:",
+let s=
 
-        samples.length,
+Math.max(
+-1,
+Math.min(
+1,
+samples[i]
+)
+);
 
-        "| Bytes:",
 
-        pcmData.byteLength
+pcmData[i]=
 
-    );
+s<0
+
+?
+
+s*32768
+
+:
+
+s*32767;
+
+}
 
 
-    if(
+if(
 
-        ws &&
+ws &&
 
-        ws.readyState===1
+ws.readyState===1
 
-    ){
+){
 
-        ws.send(
+ws.send(
 
-            pcmData.buffer
+pcmData.buffer
 
-        );
+);
 
-    }
+}
 
 };
 
 
 source.connect(
-
-    workletNode
-
+workletNode
 );
-
 
 workletNode.connect(
-
-    audioContext.destination
-
+audioContext.destination
 );
 
-
 }
 
-catch(e){
 
-console.log(e);
+else{
 
-}
 
-};
-
+recording=false;
 
 
 document
 .getElementById(
-    "stopBtn"
+"recordBtn"
 )
-.onclick=async()=>{
+.innerText=
+
+"Start Recording";
 
 
 console.log(
-    "Stopping..."
+"Stopping recording..."
 );
 
 
-if(workletNode){
+workletNode.disconnect();
 
-    workletNode.disconnect();
-
-}
+source.disconnect();
 
 
-if(source){
+ws.send(
 
-    source.disconnect();
+JSON.stringify({
 
-}
+type:"stop"
 
+})
 
-chunkCount=0;
-
-
-/*
-wait for final chunks
-*/
-
-setTimeout(()=>{
-
-
-if(
-
-    ws &&
-
-    ws.readyState===1
-
-){
-
-console.log(
-    "Closing websocket..."
 );
 
-ws.close();
-
 }
-
-
-/*
-prepare new websocket
-for next recording
-*/
-
-setTimeout(()=>{
-
-connectSocket();
-
-},300);
-
-
-},500);
-
 
 };
-
 
 </script>
 

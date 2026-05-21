@@ -1,4 +1,5 @@
 fastapi
-uvicorn[standard]
+uvicorn
 websockets
 python-dotenv
+openai

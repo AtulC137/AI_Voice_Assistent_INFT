@@ -1,182 +1,202 @@
-"""
-Low latency websocket
+import json
 
-Fixes:
-- Prevent concurrent websocket reads
-- Preserve final words
-- Keep async processing
-- Lower latency
-"""
-
-import asyncio
-
-from fastapi import APIRouter
 from fastapi import WebSocket
+from starlette.websockets import WebSocketDisconnect
 
 from app.services.stt.sarvam_stt import SarvamSTT
+from app.services.llm.llm_service import LLMService
 
 
-router = APIRouter()
-
-BUFFER_SIZE = 48000
-
-
-@router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket
 ):
 
     await websocket.accept()
 
-    print("[WS] Connected")
+    print(
+        "[WS] Connected"
+    )
 
-    stt = SarvamSTT()
+
+    stt=SarvamSTT()
 
     await stt.connect()
 
-    print("[STT] Connected")
 
-    audio_buffer = b""
-
-    pending_task = None
+    llm=LLMService()
 
 
-    async def receive_stt():
-
-        try:
-
-            response = await stt.receive()
-
-            print(
-                "\n[STT RESPONSE]"
-            )
-
-            print(
-                response
-            )
-
-
-            if response.get(
-                "type"
-            ) == "data":
-
-                transcript=(
-
-                    response[
-                        "data"
-                    ].get(
-                        "transcript",
-                        ""
-                    )
-
-                )
-
-
-                if transcript:
-
-                    await websocket.send_text(
-                        transcript
-                    )
-
-
-        except Exception as e:
-
-            print(
-                "\n[STT ERROR]"
-            )
-
-            print(e)
+    audio_buffer=b""
 
 
     try:
 
+
         while True:
 
-            chunk = await websocket.receive_bytes()
 
-            audio_buffer += chunk
-
-
-            print(
-
-                "[Chunk]",
-                len(chunk),
-
-                "| Buffer:",
-
-                len(audio_buffer)
-
-            )
+            message=await websocket.receive()
 
 
-            if len(
-                audio_buffer
-            ) >= BUFFER_SIZE:
+            if "bytes" in message:
+
+
+                chunk=message["bytes"]
+
+                audio_buffer+=chunk
 
 
                 print(
-                    "\n[Sending to STT]"
+
+                    "[Buffer]",
+
+                    len(audio_buffer)
+
                 )
 
 
-                await stt.send_audio(
-                    audio_buffer
+
+            elif "text" in message:
+
+
+                data=json.loads(
+
+                    message["text"]
+
                 )
 
 
-                await stt.flush()
+                if data.get("type")=="stop":
 
 
-                if (
-
-                    pending_task
-                    and
-                    not pending_task.done()
-
-                ):
-
-                    await pending_task
-
-
-                pending_task = (
-
-                    asyncio.create_task(
-                        receive_stt()
+                    print(
+                        "\n[STOP RECEIVED]"
                     )
 
-                )
+
+                    print(
+                        "\nSending combined audio..."
+                    )
 
 
-                audio_buffer = b""
+                    print(
+
+                        "Bytes:",
+
+                        len(audio_buffer)
+
+                    )
+
+
+                    await stt.send_audio(
+
+                        audio_buffer
+
+                    )
+
+
+                    await stt.flush()
+
+
+                    response=await stt.receive()
+
+
+                    print(
+                        "\n[STT RESPONSE]"
+                    )
+
+                    print(
+                        response
+                    )
+
+
+                    transcript=(
+
+                        response[
+                            "data"
+                        ].get(
+
+                            "transcript",
+
+                            ""
+
+                        )
+
+                    )
+
+
+                    print(
+                        "\n================"
+                    )
+
+                    print(
+                        "[TRANSCRIPT]"
+                    )
+
+                    print(
+                        transcript
+                    )
+
+                    print(
+                        "================"
+                    )
+
+
+                    llm_response=(
+
+                        await llm.generate(
+
+                            transcript
+
+                        )
+
+                    )
+
+
+                    print(
+                        "\n[LLM RESPONSE]"
+                    )
+
+                    print(
+                        llm_response
+                    )
+
+
+                    await websocket.send_text(
+
+                        llm_response
+
+                    )
+
+
+                    await websocket.close()
+
+
+                    break
+
+
+
+    except WebSocketDisconnect:
+
+        print(
+            "\n[CLIENT CLOSED]"
+        )
 
 
     except Exception as e:
 
         print(
-            "\n[Closing]"
+            "\n[ERROR]"
         )
 
-
-        if pending_task:
-
-            await pending_task
+        print(e)
 
 
-        if len(audio_buffer)>0:
-
-            print(
-                "\n[Sending remaining]"
-            )
-
-            await stt.send_audio(
-                audio_buffer
-            )
-
-            await stt.flush()
-
-            await receive_stt()
+    finally:
 
 
         await stt.close()
 
-        print(e)
+        print(
+            "[WS Closed]"
+        )
