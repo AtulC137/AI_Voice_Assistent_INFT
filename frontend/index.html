@@ -10,9 +10,7 @@
 <h1>AI Voice Assistant</h1>
 
 <button id="recordBtn">
-
-Start Recording
-
+Start Conversation
 </button>
 
 <script>
@@ -27,15 +25,29 @@ let workletNode=null;
 let initialized=false;
 let recording=false;
 
+let speechStarted=false;
+let silenceTimer=null;
+
+let bufferedChunks=[];
+
+let isAIPlaying=false;
+
+
+/* less sensitive */
+
+const SILENCE_THRESHOLD=0.03;
+
+const SILENCE_DURATION=700;
+
+const MIN_AUDIO_CHUNKS=8;
+
+
 
 function connectSocket(){
 
 ws=new WebSocket(
-
 "ws://localhost:8000/ws"
-
 );
-
 
 ws.binaryType="arraybuffer";
 
@@ -43,7 +55,7 @@ ws.binaryType="arraybuffer";
 ws.onopen=()=>{
 
 console.log(
-"Connected"
+"[WS] Connected"
 );
 
 };
@@ -53,41 +65,45 @@ ws.onmessage=(event)=>{
 
 
 console.log(
-"Audio received"
+"[AI AUDIO RECEIVED]"
 );
 
 
-const blob=
+isAIPlaying=true;
 
-new Blob(
 
+const blob=new Blob(
 [event.data],
-
 {
-
-type:"audio/wav"
-
+type:"audio/mp3"
 }
-
 );
 
 
 const url=
-
 URL.createObjectURL(
-
 blob
-
 );
 
 
 const audio=
+new Audio(
+url
+);
 
-new Audio(url);
+
+audio.onended=()=>{
+
+console.log(
+"[AI FINISHED]"
+);
+
+isAIPlaying=false;
+
+};
 
 
 audio.play();
-
 
 };
 
@@ -95,10 +111,13 @@ audio.play();
 ws.onclose=()=>{
 
 console.log(
-"Disconnected"
+"[WS] Closed"
 );
 
+recording=false;
+
 };
+
 
 }
 
@@ -148,6 +167,109 @@ initialized=true;
 
 
 
+function sendBufferedAudio(){
+
+
+if(
+
+bufferedChunks.length
+<
+MIN_AUDIO_CHUNKS
+
+){
+
+bufferedChunks=[];
+
+speechStarted=false;
+
+return;
+
+}
+
+
+
+console.log(
+"[SENDING AUDIO]"
+);
+
+
+let totalLength=0;
+
+
+bufferedChunks.forEach(
+
+chunk=>{
+
+totalLength+=chunk.length;
+
+}
+
+);
+
+
+let merged=
+
+new Int16Array(
+totalLength
+);
+
+
+let offset=0;
+
+
+bufferedChunks.forEach(
+
+chunk=>{
+
+merged.set(
+chunk,
+offset
+);
+
+offset+=
+chunk.length;
+
+}
+
+);
+
+
+if(
+
+ws &&
+
+ws.readyState===1
+
+){
+
+ws.send(
+merged.buffer
+);
+
+
+ws.send(
+
+JSON.stringify({
+
+type:"stop"
+
+})
+
+);
+
+}
+
+
+bufferedChunks=[];
+
+speechStarted=false;
+
+silenceTimer=null;
+
+}
+
+
+
 document
 .getElementById(
 "recordBtn"
@@ -155,13 +277,14 @@ document
 .onclick=async()=>{
 
 
-if(!recording){
+if(recording){
+
+return;
+
+}
 
 
 recording=true;
-
-
-connectSocket();
 
 
 document
@@ -170,7 +293,10 @@ document
 )
 .innerText=
 
-"Stop Recording";
+"Listening";
+
+
+connectSocket();
 
 
 await initializeAudio();
@@ -180,9 +306,7 @@ source=
 
 audioContext
 .createMediaStreamSource(
-
 mediaStream
-
 );
 
 
@@ -197,21 +321,90 @@ audioContext,
 );
 
 
+
 workletNode
 .port
 .onmessage=(event)=>{
 
 
-if(!recording){
+if(
+
+!recording ||
+
+isAIPlaying
+
+){
 
 return;
 
 }
 
 
-let samples=
+const samples=
 
 event.data;
+
+
+let sum=0;
+
+
+for(
+
+let i=0;
+
+i<samples.length;
+
+i++
+
+){
+
+sum+=
+
+samples[i]
+*
+samples[i];
+
+}
+
+
+let rms=
+
+Math.sqrt(
+
+sum/
+
+samples.length
+
+);
+
+
+
+if(
+
+rms>
+
+SILENCE_THRESHOLD
+
+){
+
+speechStarted=true;
+
+
+if(
+
+silenceTimer
+
+){
+
+clearTimeout(
+
+silenceTimer
+
+);
+
+silenceTimer=null;
+
+}
 
 
 let pcmData=
@@ -226,7 +419,9 @@ samples.length
 for(
 
 let i=0;
+
 i<samples.length;
+
 i++
 
 ){
@@ -263,33 +458,11 @@ s*32767;
 }
 
 
-if(
+bufferedChunks.push(
 
-ws &&
-
-ws.readyState===1
-
-){
-
-ws.send(
-
-pcmData.buffer
+pcmData
 
 );
-
-}
-
-};
-
-
-source.connect(
-workletNode
-);
-
-workletNode.connect(
-audioContext.destination
-);
-
 
 }
 
@@ -297,45 +470,61 @@ audioContext.destination
 else{
 
 
-recording=false;
+if(
 
+speechStarted &&
 
-document
-.getElementById(
-"recordBtn"
-)
-.innerText=
+!silenceTimer
 
-"Start Recording";
+){
 
+silenceTimer=
+
+setTimeout(
+
+()=>{
 
 console.log(
-
-"Stopping recording..."
-
+"[PAUSE DETECTED]"
 );
 
+sendBufferedAudio();
 
-workletNode.disconnect();
+},
 
-source.disconnect();
-
-
-ws.send(
-
-JSON.stringify({
-
-type:"stop"
-
-})
+SILENCE_DURATION
 
 );
 
 }
+
+}
+
+
+};
+
+
+const silentNode=
+audioContext.createGain();
+
+silentNode.gain.value=0;
+
+source.connect(
+workletNode
+);
+
+workletNode.connect(
+silentNode
+);
+
+silentNode.connect(
+audioContext.destination
+);
 
 };
 
 </script>
 
 </body>
+
 </html>

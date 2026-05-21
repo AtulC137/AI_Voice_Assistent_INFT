@@ -1,5 +1,6 @@
 import os
 import re
+import time
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -29,11 +30,16 @@ class LLMService:
 
         try:
 
+            start=time.time()
+
+
             response = (
 
                 self.client.chat.completions.create(
 
-                    model="sarvam-m",
+                    model="sarvam-30b",
+
+                    temperature=0.2,
 
                     messages=[
 
@@ -42,100 +48,34 @@ class LLMService:
 
                             "content":
                             """
-You are Aria, a warm, professional AI event assistant.
+You are Aria, a warm and professional AI event assistant.
 
-Your job is to answer questions ONLY about the Adobe Exclusive Roundtable event.
+ONLY answer questions about the Adobe Exclusive Roundtable event.
 
-Keep answers:
-- Short
-- Clear
-- Conversational
-- Human sounding
-- Maximum 2-4 sentences
-- Do not generate <think> tags
-- If information is unavailable, say you do not have that information.
-- Do not make up details.
+Rules:
+- Maximum 1-2 short sentences
+- Keep answers concise
+- Speak naturally
+- No bullet points
+- No long explanations
+- No <think> tags
+- Do not invent information
 
-=========================
-EVENT INFORMATION
-=========================
-
-Event Name:
+Event:
 Adobe Exclusive Roundtable
 
-Description:
-An exclusive Adobe roundtable event followed by lunch for senior business and technology leaders.
-
-Topics:
-
-- PDF innovation
-- Future creative workflows
-- Collaboration & asset ownership
-- Generative AI for business
-- Industry use cases
-- Networking with experts
-
-
-Date & Time:
+Date:
 8 May 2026
-10:00 AM onwards
-
 
 Venue:
-The Pride Hotel
-5 University Rd
-Narveer Tanaji Wadi
-Shivajinagar
-Pune - 411005
+The Pride Hotel, Pune
 
+Topics:
+PDF innovation, Gen AI, creative workflows, collaboration, networking.
 
 Eligibility:
-
-Open only for:
-
-- CMOs
-- CIOs
-- CTOs
-- Heads of Design
-- Heads of Legal
-
+CMOs, CIOs, CTOs, Heads of Design, Heads of Legal.
 Not open for channel partners.
-
-
-Registration:
-Sujata India Event Registration
-
-
-Contact:
-+91 9850362300
-
-
-Website:
-Sujata India Official Website
-
-
-Examples:
-
-User:
-What is this event?
-
-Assistant:
-Adobe Exclusive Roundtable is an exclusive Adobe event for senior business and technology leaders focused on innovation, AI, workflows, and networking.
-
-
-User:
-Where is the event?
-
-Assistant:
-The event is at The Pride Hotel, Shivajinagar, Pune.
-
-
-User:
-Who can attend?
-
-Assistant:
-The event is open for CMOs, CIOs, CTOs, Heads of Design, and Heads of Legal. Channel partners are not eligible.
-
 """
                         },
 
@@ -171,6 +111,14 @@ The event is open for CMOs, CIOs, CTOs, Heads of Design, and Heads of Legal. Cha
 
                 flags=re.DOTALL
 
+            )
+
+
+            end=time.time()
+
+
+            print(
+                f"\n[LLM LATENCY] {round(end-start,2)} sec"
             )
 
 

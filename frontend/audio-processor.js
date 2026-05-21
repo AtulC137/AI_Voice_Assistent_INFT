@@ -4,7 +4,7 @@ class AudioProcessor extends AudioWorkletProcessor {
 
         const input = inputs[0];
 
-        if(input.length > 0){
+        if (input.length > 0) {
 
             this.port.postMessage(
                 input[0]

@@ -1,4 +1,5 @@
 import json
+import time
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
@@ -46,15 +47,6 @@ async def websocket_endpoint(
                 audio_buffer+=chunk
 
 
-                print(
-
-                    "[Buffer]",
-
-                    len(audio_buffer)
-
-                )
-
-
             elif "text" in message:
 
 
@@ -68,9 +60,17 @@ async def websocket_endpoint(
                 if data.get("type")=="stop":
 
 
+                    total_start=time.time()
+
+
                     print(
-                        "\nSending combined audio..."
+                        "\n[PROCESSING STARTED]"
                     )
+
+
+                    # ---------------- STT ----------------
+
+                    stt_start=time.time()
 
 
                     await stt.send_audio(
@@ -101,6 +101,14 @@ async def websocket_endpoint(
                     )
 
 
+                    stt_end=time.time()
+
+
+                    print(
+                        f"\n[STT LATENCY] {round(stt_end-stt_start,2)} sec"
+                    )
+
+
                     print(
                         "\n[TRANSCRIPT]"
                     )
@@ -109,6 +117,8 @@ async def websocket_endpoint(
                         transcript
                     )
 
+
+                    # ---------------- LLM ----------------
 
                     llm_response=(
 
@@ -130,6 +140,8 @@ async def websocket_endpoint(
                     )
 
 
+                    # ---------------- TTS ----------------
+
                     audio=await tts.generate(
 
                         llm_response
@@ -147,9 +159,24 @@ async def websocket_endpoint(
                         )
 
 
-                    await websocket.close()
+                    total_end=time.time()
 
-                    break
+
+                    print(
+                        f"\n[TOTAL LATENCY] {round(total_end-total_start,2)} sec"
+                    )
+
+
+                    print(
+                        "\n[READY FOR NEXT QUESTION]"
+                    )
+
+
+                    # IMPORTANT:
+                    # reset only
+                    # DO NOT CLOSE WS
+
+                    audio_buffer=b""
 
 
     except WebSocketDisconnect:

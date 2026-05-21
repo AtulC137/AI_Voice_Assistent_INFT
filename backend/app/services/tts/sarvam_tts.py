@@ -1,5 +1,6 @@
 import os
 import base64
+import time
 
 from dotenv import load_dotenv
 from sarvamai import SarvamAI
@@ -28,6 +29,9 @@ class SarvamTTS:
 
         try:
 
+            start=time.time()
+
+
             response = (
 
                 self.client
@@ -42,7 +46,9 @@ class SarvamTTS:
 
                     speaker="ishita",
 
-                    speech_sample_rate=24000
+                    speech_sample_rate=16000,
+
+                    output_audio_codec="mp3"
 
                 )
 
@@ -66,6 +72,14 @@ class SarvamTTS:
 
                 )
 
+            )
+
+
+            end=time.time()
+
+
+            print(
+                f"\n[TTS LATENCY] {round(end-start,2)} sec"
             )
 
 
