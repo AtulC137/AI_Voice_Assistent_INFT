@@ -33,6 +33,33 @@ async def websocket_endpoint(
 
     try:
 
+        # ---------------- AI GREETING ----------------
+
+        greeting=(
+            "Hello, I am Aria. "
+            "Welcome to the Adobe Exclusive Roundtable. "
+            "How can I help you today?"
+        )
+
+        print(
+            "\n[AI GREETING]"
+        )
+
+        greeting_audio=await tts.generate(
+            greeting
+        )
+
+        if greeting_audio:
+
+            await websocket.send_bytes(
+                greeting_audio
+            )
+
+        print(
+            "[READY FOR USER]"
+        )
+
+
         while True:
 
 
@@ -68,7 +95,7 @@ async def websocket_endpoint(
                     )
 
 
-                    # ---------------- STT ----------------
+                    # ---------- STT ----------
 
                     stt_start=time.time()
 
@@ -118,7 +145,67 @@ async def websocket_endpoint(
                     )
 
 
-                    # ---------------- LLM ----------------
+                    # ignore empty speech
+
+                    if not transcript.strip():
+
+                        print(
+                            "[EMPTY TRANSCRIPT]"
+                        )
+
+                        audio_buffer=b""
+
+                        continue
+
+
+                    # ---------- STOP INTENT ----------
+
+                    stop_words=[
+
+                        "bye",
+                        "goodbye",
+                        "stop conversation",
+                        "thank you bye",
+                        "that's all"
+
+                    ]
+
+
+                    if any(
+
+                        word in transcript.lower()
+
+                        for word in stop_words
+
+                    ):
+
+
+                        goodbye=(
+
+                            "Goodbye. "
+                            "Have a great day."
+
+                        )
+
+
+                        audio=await tts.generate(
+
+                            goodbye
+
+                        )
+
+
+                        if audio:
+
+                            await websocket.send_bytes(
+                                audio
+                            )
+
+
+                        break
+
+
+                    # ---------- LLM ----------
 
                     llm_response=(
 
@@ -140,7 +227,7 @@ async def websocket_endpoint(
                     )
 
 
-                    # ---------------- TTS ----------------
+                    # ---------- TTS ----------
 
                     audio=await tts.generate(
 
@@ -172,10 +259,6 @@ async def websocket_endpoint(
                     )
 
 
-                    # IMPORTANT:
-                    # reset only
-                    # DO NOT CLOSE WS
-
                     audio_buffer=b""
 
 
@@ -200,5 +283,5 @@ async def websocket_endpoint(
         await stt.close()
 
         print(
-            "[WS Closed]"
+            "[WS CLOSED]"
         )

@@ -26,27 +26,35 @@ let initialized=false;
 let recording=false;
 
 let speechStarted=false;
+
 let silenceTimer=null;
 
 let bufferedChunks=[];
 
 let isAIPlaying=false;
 
+let isProcessing=false;
 
-/* less sensitive */
+let currentAudio=null;
+
+
+/* VAD */
 
 const SILENCE_THRESHOLD=0.03;
 
-const SILENCE_DURATION=700;
+const SILENCE_DURATION=350;
 
 const MIN_AUDIO_CHUNKS=8;
 
 
+/* ---------------- WEBSOCKET ---------------- */
 
 function connectSocket(){
 
 ws=new WebSocket(
+
 "ws://localhost:8000/ws"
+
 );
 
 ws.binaryType="arraybuffer";
@@ -69,59 +77,97 @@ console.log(
 );
 
 
+/* stop old audio if still alive */
+
+if(currentAudio){
+
+currentAudio.pause();
+
+currentAudio=null;
+
+}
+
+
 isAIPlaying=true;
 
 
-const blob=new Blob(
+const blob=
+
+new Blob(
+
 [event.data],
+
 {
+
 type:"audio/mp3"
+
 }
+
 );
 
 
 const url=
+
 URL.createObjectURL(
+
 blob
+
 );
 
 
-const audio=
+currentAudio=
+
 new Audio(
+
 url
+
 );
 
 
-audio.onended=()=>{
+currentAudio.onended=()=>{
+
 
 console.log(
+
 "[AI FINISHED]"
+
 );
+
 
 isAIPlaying=false;
 
+isProcessing=false;
+
+currentAudio=null;
+
 };
 
 
-audio.play();
+currentAudio.play();
 
 };
+
 
 
 ws.onclose=()=>{
 
+
 console.log(
+
 "[WS] Closed"
+
 );
+
 
 recording=false;
 
 };
 
-
 }
 
 
+
+/* ---------------- AUDIO INIT ---------------- */
 
 async function initializeAudio(){
 
@@ -167,10 +213,14 @@ initialized=true;
 
 
 
+/* ---------------- SEND AUDIO ---------------- */
+
 function sendBufferedAudio(){
 
 
 if(
+
+isProcessing ||
 
 bufferedChunks.length
 <
@@ -187,9 +237,13 @@ return;
 }
 
 
+isProcessing=true;
+
 
 console.log(
+
 "[SENDING AUDIO]"
+
 );
 
 
@@ -210,7 +264,9 @@ totalLength+=chunk.length;
 let merged=
 
 new Int16Array(
+
 totalLength
+
 );
 
 
@@ -222,11 +278,15 @@ bufferedChunks.forEach(
 chunk=>{
 
 merged.set(
+
 chunk,
+
 offset
+
 );
 
 offset+=
+
 chunk.length;
 
 }
@@ -243,7 +303,9 @@ ws.readyState===1
 ){
 
 ws.send(
+
 merged.buffer
+
 );
 
 
@@ -270,6 +332,8 @@ silenceTimer=null;
 
 
 
+/* ---------------- BUTTON ---------------- */
+
 document
 .getElementById(
 "recordBtn"
@@ -293,7 +357,7 @@ document
 )
 .innerText=
 
-"Listening";
+"Listening...";
 
 
 connectSocket();
@@ -306,7 +370,9 @@ source=
 
 audioContext
 .createMediaStreamSource(
+
 mediaStream
+
 );
 
 
@@ -345,6 +411,9 @@ const samples=
 event.data;
 
 
+/* RMS */
+
+
 let sum=0;
 
 
@@ -376,6 +445,7 @@ sum/
 samples.length
 
 );
+
 
 
 
@@ -467,6 +537,10 @@ pcmData
 }
 
 
+
+/* SILENCE DETECTED */
+
+
 else{
 
 
@@ -484,9 +558,13 @@ setTimeout(
 
 ()=>{
 
+
 console.log(
+
 "[PAUSE DETECTED]"
+
 );
+
 
 sendBufferedAudio();
 
@@ -500,14 +578,18 @@ SILENCE_DURATION
 
 }
 
-
 };
 
 
+
 const silentNode=
-audioContext.createGain();
+
+audioContext
+.createGain();
+
 
 silentNode.gain.value=0;
+
 
 source.connect(
 workletNode
@@ -526,5 +608,4 @@ audioContext.destination
 </script>
 
 </body>
-
 </html>
